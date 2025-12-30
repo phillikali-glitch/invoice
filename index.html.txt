@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAMANI CREATIONS LTD | Professional Invoicing System</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-container">
+        <div class="login-box">
+            <div class="logo-container">
+                <img src="https://i.ibb.co/H1wL4ph/official-samani-logo.png" alt="SAMANI CREATIONS" class="logo">
+            </div>
+            <h2>SAMANI CREATIONS LTD</h2>
+            <p class="subtitle">Professional Invoicing System</p>
+            
+            <div class="login-form">
+                <div class="form-group">
+                    <label for="username"><i class="fas fa-user"></i> Username</label>
+                    <input type="text" id="username" placeholder="Enter username">
+                </div>
+                <div class="form-group">
+                    <label for="password"><i class="fas fa-lock"></i> Password</label>
+                    <input type="password" id="password" placeholder="Enter password">
+                </div>
+                <button id="loginBtn" class="btn-login">
+                    <i class="fas fa-sign-in-alt"></i> Login
+                </button>
+                <div id="loginError" class="error-message"></div>
+            </div>
+            
+            <div class="system-info">
+                <p><i class="fas fa-info-circle"></i> Version 2.0 | Secure Professional System</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="mainApp" class="container" style="display: none;">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <img src="https://i.ibb.co/H1wL4ph/official-samani-logo.png" alt="SAMANI CREATIONS" class="header-logo">
+                <div>
+                    <h1>SAMANI CREATIONS LTD</h1>
+                    <p class="tagline">Furniture • Interior Design • Woodwork</p>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="user-info">
+                    <i class="fas fa-user-circle"></i>
+                    <span id="currentUser">Admin</span>
+                </div>
+                <button id="logoutBtn" class="btn-logout">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
+            </div>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="nav-tabs">
+                <button class="nav-tab active" data-tab="create">
+                    <i class="fas fa-plus-circle"></i> Create New
+                </button>
+                <button class="nav-tab" data-tab="documents">
+                    <i class="fas fa-file-alt"></i> Documents
+                </button>
+                <button class="nav-tab" data-tab="reports">
+                    <i class="fas fa-chart-bar"></i> Reports
+                </button>
+                <button class="nav-tab" data-tab="clients">
+                    <i class="fas fa-users"></i> Clients
+                </button>
+                <button class="nav-tab" data-tab="settings">
+                    <i class="fas fa-cog"></i> Settings
+                </button>
+            </div>
+            <div class="nav-actions">
+                <button id="quickReportBtn" class="btn-action">
+                    <i class="fas fa-file-export"></i> Quick Report
+                </button>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Create Tab -->
+            <div id="createTab" class="tab-content active">
+                <div class="document-selector">
+                    <h2><i class="fas fa-file-invoice"></i> Create New Document</h2>
+                    <div class="doc-type-cards">
+                        <div class="doc-card" data-type="quote">
+                            <div class="doc-icon quote">
+                                <i class="fas fa-file-signature"></i>
+                            </div>
+                            <h3>QUOTATION</h3>
+                            <p>Create professional quotes for clients</p>
+                            <button class="btn-select" data-type="quote">Select</button>
+                        </div>
+                        <div class="doc-card" data-type="invoice">
+                            <div class="doc-icon invoice">
+                                <i class="fas fa-file-invoice-dollar"></i>
+                            </div>
+                            <h3>INVOICE</h3>
+                            <p>Generate invoices for completed work</p>
+                            <button class="btn-select" data-type="invoice">Select</button>
+                        </div>
+                        <div class="doc-card" data-type="receipt">
+                            <div class="doc-icon receipt">
+                                <i class="fas fa-receipt"></i>
+                            </div>
+                            <h3>RECEIPT</h3>
+                            <p>Issue receipts for payments received</p>
+                            <button class="btn-select" data-type="receipt">Select</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Form Container -->
+                <div id="formContainer" class="form-container" style="display: none;">
+                    <div class="form-header">
+                        <h3 id="formTitle">Create Document</h3>
+                        <div class="form-actions">
+                            <button id="saveDraftBtn" class="btn-secondary">
+                                <i class="fas fa-save"></i> Save Draft
+                            </button>
+                            <button id="previewBtn" class="btn-secondary">
+                                <i class="fas fa-eye"></i> Preview
+                            </button>
+                            <button id="submitBtn" class="btn-primary">
+                                <i class="fas fa-check"></i> Submit & Generate
+                            </button>
+                        </div>
+                    </div>
+
+                    <form id="documentForm">
+                        <!-- Document Type Hidden Field -->
+                        <input type="hidden" id="docType" name="docType">
+                        <input type="hidden" id="docRef" name="docRef">
+
+                        <!-- Document Info -->
+                        <div class="form-section">
+                            <h4><i class="fas fa-info-circle"></i> Document Information</h4>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="date">Date *</label>
+                                    <input type="date" id="date" name="date" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="dueDate">Due Date</label>
+                                    <input type="date" id="dueDate" name="dueDate">
+                                </div>
+                                <div class="form-group">
+                                    <label for="paymentTerms">Payment Terms *</label>
+                                    <select id="paymentTerms" name="paymentTerms" required>
+                                        <option value="">Select Terms</option>
+                                        <option value="Net 7">Net 7 Days</option>
+                                        <option value="Net 14">Net 14 Days</option>
+                                        <option value="Net 30">Net 30 Days</option>
+                                        <option value="50% Advance">50% Advance</option>
+                                        <option value="100% Advance">100% Advance</option>
+                                        <option value="Upon Completion">Upon Completion</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Client Information -->
+                        <div class="form-section">
+                            <h4><i class="fas fa-user-tie"></i> Client Information</h4>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="clientName">Client Name *</label>
+                                    <input type="text" id="clientName" name="clientName" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="clientEmail">Client Email</label>
+                                    <input type="email" id="clientEmail" name="clientEmail">
+                                </div>
+                                <div class="form-group">
+                                    <label for="clientPhone">Client Phone *</label>
+                                    <input type="tel" id="clientPhone" name="clientPhone" required>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="clientAddress">Client Address</label>
+                                <textarea id="clientAddress" name="clientAddress" rows="2"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="projectName">Project Name *</label>
+                                <input type="text" id="projectName" name="projectName" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="clientSite">Client Site Location</label>
+                                <input type="text" id="clientSite" name="clientSite">
+                            </div>
+                        </div>
+
+                        <!-- Items Table -->
+                        <div class="form-section">
+                            <h4><i class="fas fa-list-alt"></i> Items & Services</h4>
+                            <table id="itemsTable" class="items-table">
+                                <thead>
+                                    <tr>
+                                        <th>Item</th>
+                                        <th>Description</th>
+                                        <th>Quantity</th>
+                                        <th>Rate (UGX)</th>
+                                        <th>Total (UGX)</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="itemsBody">
+                                    <!-- Items will be added here -->
+                                </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <td colspan="6">
+                                            <button type="button" id="addItemBtn" class="btn-add-item">
+                                                <i class="fas fa-plus"></i> Add Item
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+
+                        <!-- Receipt Specific Fields -->
+                        <div id="receiptFields" class="form-section" style="display: none;">
+                            <h4><i class="fas fa-money-check-alt"></i> Payment Information</h4>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="paymentMode">Payment Mode *</label>
+                                    <select id="paymentMode" name="paymentMode">
+                                        <option value="">Select Mode</option>
+                                        <option value="Bank Transfer">Bank Transfer</option>
+                                        <option value="Mobile Money">Mobile Money</option>
+                                        <option value="Cash">Cash</option>
+                                        <option value="Cheque">Cheque</option>
+                                        <option value="VISA Card">VISA Card</option>
+                                        <option value="MasterCard">MasterCard</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="accountNumber">Account/Reference Number *</label>
+                                    <input type="text" id="accountNumber" name="accountNumber">
+                                </div>
+                                <div class="form-group">
+                                    <label for="invoiceRef">Related Invoice Reference</label>
+                                    <input type="text" id="invoiceRef" name="invoiceRef" placeholder="SAMANI_UG-INV-XXXX">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Totals -->
+                        <div class="form-section totals-section">
+                            <h4><i class="fas fa-calculator"></i> Totals</h4>
+                            <div class="totals-row">
+                                <div class="total-item">
+                                    <span>Subtotal:</span>
+                                    <span id="subtotal">0 UGX</span>
+                                </div>
+                                <div class="total-item">
+                                    <span>Tax (18%):</span>
+                                    <span id="taxAmount">0 UGX</span>
+                                </div>
+                                <div class="total-item grand-total">
+                                    <span>GRAND TOTAL:</span>
+                                    <span id="grandTotal">0 UGX</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Notes -->
+                        <div class="form-section">
+                            <h4><i class="fas fa-sticky-note"></i> Additional Notes</h4>
+                            <div class="form-group">
+                                <textarea id="notes" name="notes" rows="4" placeholder="Add any additional notes or terms here..."></textarea>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Documents Tab -->
+            <div id="documentsTab" class="tab-content">
+                <div class="documents-header">
+                    <h2><i class="fas fa-archive"></i> Document Archive</h2>
+                    <div class="filter-controls">
+                        <select id="docFilter" class="filter-select">
+                            <option value="all">All Documents</option>
+                            <option value="quote">Quotations</option>
+                            <option value="invoice">Invoices</option>
+                            <option value="receipt">Receipts</option>
+                        </select>
+                        <input type="text" id="docSearch" class="search-input" placeholder="Search documents...">
+                    </div>
+                </div>
+                <div id="documentsList" class="documents-list">
+                    <!-- Documents will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Reports Tab -->
+            <div id="reportsTab" class="tab-content">
+                <div class="reports-header">
+                    <h2><i class="fas fa-chart-line"></i> Business Reports</h2>
+                    <div class="report-period">
+                        <button class="btn-period active" data-period="today">Today</button>
+                        <button class="btn-period" data-period="week">This Week</button>
+                        <button class="btn-period" data-period="month">This Month</button>
+                        <button class="btn-period" data-period="quarter">This Quarter</button>
+                        <button class="btn-period" data-period="year">This Year</button>
+                    </div>
+                </div>
+                
+                <div class="reports-grid">
+                    <div class="report-card">
+                        <div class="report-card-header">
+                            <h3><i class="fas fa-file-invoice-dollar"></i> Revenue Summary</h3>
+                            <button class="btn-export" onclick="exportRevenueReport()">
+                                <i class="fas fa-download"></i> Export
+                            </button>
+                        </div>
+                        <div class="report-card-body">
+                            <canvas id="revenueChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="report-card">
+                        <div class="report-card-header">
+                            <h3><i class="fas fa-list-ol"></i> Document Summary</h3>
+                            <button class="btn-export" onclick="exportDocumentReport()">
+                                <i class="fas fa-download"></i> Export
+                            </button>
+                        </div>
+                        <div class="report-card-body">
+                            <div id="documentStats"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="report-card">
+                        <div class="report-card-header">
+                            <h3><i class="fas fa-users"></i> Client Activity</h3>
+                            <button class="btn-export" onclick="exportClientReport()">
+                                <i class="fas fa-download"></i> Export
+                            </button>
+                        </div>
+                        <div class="report-card-body">
+                            <div id="clientActivity"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="report-card">
+                        <div class="report-card-header">
+                            <h3><i class="fas fa-calendar-alt"></i> Daily Report</h3>
+                            <button class="btn-export" onclick="generateDailyReport()">
+                                <i class="fas fa-file-pdf"></i> Generate
+                            </button>
+                        </div>
+                        <div class="report-card-body">
+                            <div id="dailyReport"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Clients Tab -->
+            <div id="clientsTab" class="tab-content">
+                <div class="clients-header">
+                    <h2><i class="fas fa-address-book"></i> Client Database</h2>
+                    <button id="addClientBtn" class="btn-primary">
+                        <i class="fas fa-user-plus"></i> Add New Client
+                    </button>
+                </div>
+                <div id="clientsList" class="clients-list">
+                    <!-- Clients will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div id="settingsTab" class="tab-content">
+                <div class="settings-header">
+                    <h2><i class="fas fa-sliders-h"></i> System Settings</h2>
+                </div>
+                
+                <div class="settings-grid">
+                    <div class="settings-card">
+                        <h3><i class="fas fa-envelope"></i> Email Configuration</h3>
+                        <div class="form-group">
+                            <label>Approval Email</label>
+                            <input type="email" id="approvalEmail" value="gn@samanicreations.com" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label>CC Emails (comma separated)</label>
+                            <input type="text" id="ccEmails" value="sales@samanicreations.com, accounts@samanicreations.com, operations@samanicreations.com">
+                        </div>
+                        <button class="btn-save" onclick="saveEmailSettings()">Save Email Settings</button>
+                    </div>
+                    
+                    <div class="settings-card">
+                        <h3><i class="fas fa-file-signature"></i> Document Settings</h3>
+                        <div class="form-group">
+                            <label>Default Payment Terms</label>
+                            <select id="defaultTerms">
+                                <option value="Net 30">Net 30 Days</option>
+                                <option value="Net 14">Net 14 Days</option>
+                                <option value="50% Advance">50% Advance</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Tax Rate (%)</label>
+                            <input type="number" id="taxRate" value="18" min="0" max="100">
+                        </div>
+                        <button class="btn-save" onclick="saveDocSettings()">Save Document Settings</button>
+                    </div>
+                    
+                    <div class="settings-card">
+                        <h3><i class="fas fa-bell"></i> Notifications</h3>
+                        <div class="checkbox-group">
+                            <label>
+                                <input type="checkbox" id="emailNotifications" checked>
+                                Enable Email Notifications
+                            </label>
+                        </div>
+                        <div class="checkbox-group">
+                            <label>
+                                <input type="checkbox" id="autoReports" checked>
+                                Auto-generate Daily Reports
+                            </label>
+                        </div>
+                        <div class="checkbox-group">
+                            <label>
+                                <input type="checkbox" id="approvalRequired" checked>
+                                Require Approval for Invoices/Quotes
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="settings-card">
+                        <h3><i class="fas fa-database"></i> System Information</h3>
+                        <div class="sys-info">
+                            <p><strong>Version:</strong> 2.0 Professional</p>
+                            <p><strong>Last Backup:</strong> <span id="lastBackup">Not backed up</span></p>
+                            <p><strong>Documents Stored:</strong> <span id="docCount">0</span></p>
+                            <p><strong>Storage Used:</strong> <span id="storageUsed">0 MB</span></p>
+                        </div>
+                        <button class="btn-backup" onclick="backupData()">
+                            <i class="fas fa-database"></i> Backup Data
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Preview Modal -->
+        <div id="previewModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Document Preview</h3>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="previewContent"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" onclick="printPreview()">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                    <button class="btn-primary" onclick="generatePDF()">
+                        <i class="fas fa-file-pdf"></i> Export as PDF
+                    </button>
+                    <button id="sendApprovalBtn" class="btn-approval" style="display: none;">
+                        <i class="fas fa-paper-plane"></i> Send for Approval
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://js.puter.com/v2/"></script>
+    <script src="database.js"></script>
+    <script src="email-service.js"></script>
+    <script src="report-generator.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

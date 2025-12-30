@@ -1,0 +1,312 @@
+// Report generation module
+
+class ReportGenerator {
+    constructor() {
+        this.charts = {};
+    }
+
+    async generateDailyReport() {
+        try {
+            const reportData = await this.getDailyReportData();
+            this.displayDailyReport(reportData);
+            
+            // Optionally send email
+            if (reportData.totalDocuments > 0) {
+                await sendDailyReport(reportData);
+            }
+            
+            return reportData;
+        } catch (error) {
+            console.error('Error generating daily report:', error);
+            return null;
+        }
+    }
+
+    async getDailyReportData() {
+        const documents = await getAllDocuments();
+        const today = new Date().toISOString().split('T')[0];
+        
+        const todayDocs = documents.filter(doc => doc.date === today);
+        const weekDocs = documents.filter(doc => {
+            const docDate = new Date(doc.date);
+            const weekAgo = new Date();
+            weekAgo.setDate(weekAgo.getDate() - 7);
+            return docDate >= weekAgo;
+        });
+
+        return {
+            date: today,
+            totalDocuments: todayDocs.length,
+            quotes: todayDocs.filter(d => d.docType === 'quote').length,
+            invoices: todayDocs.filter(d => d.docType === 'invoice').length,
+            receipts: todayDocs.filter(d => d.docType === 'receipt').length,
+            totalRevenue: todayDocs.reduce((sum, doc) => sum + (doc.grandTotal || 0), 0),
+            pendingApprovals: documents.filter(d => d.status === 'pending_approval').length,
+            overdueInvoices: documents.filter(d => 
+                d.docType === 'invoice' && 
+                d.dueDate && 
+                new Date(d.dueDate) < new Date() &&
+                d.status !== 'paid'
+            ).length,
+            recentActivity: todayDocs.slice(0, 10).map(doc => ({
+                time: doc.createdAt ? new Date(doc.createdAt).toLocaleTimeString() : 'N/A',
+                type: doc.docType.toUpperCase(),
+                ref: doc.docRef,
+                client: doc.clientName,
+                amount: doc.grandTotal || 0
+            })),
+            topClients: this.getTopClients(weekDocs, 5),
+            weekSummary: this.getWeekSummary(weekDocs)
+        };
+    }
+
+    getTopClients(documents, limit = 5) {
+        const clientMap = {};
+        
+        documents.forEach(doc => {
+            if (!clientMap[doc.clientName]) {
+                clientMap[doc.clientName] = {
+                    name: doc.clientName,
+                    documents: 0,
+                    total: 0
+                };
+            }
+            clientMap[doc.clientName].documents++;
+            clientMap[doc.clientName].total += doc.grandTotal || 0;
+        });
+        
+        return Object.values(clientMap)
+            .sort((a, b) => b.total - a.total)
+            .slice(0, limit);
+    }
+
+    getWeekSummary(documents) {
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const summary = {};
+        
+        documents.forEach(doc => {
+            const day = new Date(doc.date).getDay();
+            const dayName = days[day];
+            
+            if (!summary[dayName]) {
+                summary[dayName] = {
+                    documents: 0,
+                    revenue: 0
+                };
+            }
+            
+            summary[dayName].documents++;
+            summary[dayName].revenue += doc.grandTotal || 0;
+        });
+        
+        return summary;
+    }
+
+    displayDailyReport(reportData) {
+        const dailyReportDiv = document.getElementById('dailyReport');
+        if (!dailyReportDiv) return;
+        
+        const html = `
+            <div class="daily-report">
+                <div class="report-header">
+                    <h4>Daily Report - ${reportData.date}</h4>
+                    <div class="report-summary">
+                        <div class="summary-item">
+                            <span class="summary-value">${reportData.totalDocuments}</span>
+                            <span class="summary-label">Documents</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-value">UGX ${reportData.totalRevenue?.toLocaleString() || '0'}</span>
+                            <span class="summary-label">Revenue</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="report-details">
+                    <div class="detail-section">
+                        <h5>Document Breakdown</h5>
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <span>Quotations:</span>
+                                <span>${reportData.quotes}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span>Invoices:</span>
+                                <span>${reportData.invoices}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span>Receipts:</span>
+                                <span>${reportData.receipts}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h5>Pending Actions</h5>
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <span>Pending Approval:</span>
+                                <span>${reportData.pendingApprovals}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span>Overdue Invoices:</span>
+                                <span>${reportData.overdueInvoices}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    ${reportData.recentActivity.length > 0 ? `
+                    <div class="detail-section">
+                        <h5>Recent Activity</h5>
+                        <div class="activity-list">
+                            ${reportData.recentActivity.map(activity => `
+                                <div class="activity-item">
+                                    <span class="activity-time">${activity.time}</span>
+                                    <span class="activity-desc">${activity.type} ${activity.ref}</span>
+                                    <span class="activity-amount">UGX ${activity.amount?.toLocaleString()}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+        
+        dailyReportDiv.innerHTML = html;
+    }
+
+    async exportRevenueReport() {
+        const documents = await getAllDocuments();
+        const revenueByMonth = this.groupByMonth(documents);
+        
+        const csv = this.convertToCSV(revenueByMonth, ['Month', 'Revenue (UGX)']);
+        this.downloadCSV(csv, 'revenue_report.csv');
+    }
+
+    async exportDocumentReport() {
+        const documents = await getAllDocuments();
+        
+        const reportData = documents.map(doc => ({
+            'Reference': doc.docRef,
+            'Type': doc.docType,
+            'Date': doc.date,
+            'Client': doc.clientName,
+            'Project': doc.projectName,
+            'Subtotal': doc.subtotal || 0,
+            'Tax': doc.taxAmount || 0,
+            'Total': doc.grandTotal || 0,
+            'Status': doc.status,
+            'Payment Terms': doc.paymentTerms
+        }));
+        
+        const csv = this.convertToCSV(reportData);
+        this.downloadCSV(csv, 'document_report.csv');
+    }
+
+    async exportClientReport() {
+        const documents = await getAllDocuments();
+        const clients = this.getTopClients(documents, 100); // All clients
+        
+        const reportData = clients.map(client => ({
+            'Client Name': client.name,
+            'Total Documents': client.documents,
+            'Total Value (UGX)': client.total,
+            'Average per Document': client.total / client.documents
+        }));
+        
+        const csv = this.convertToCSV(reportData);
+        this.downloadCSV(csv, 'client_report.csv');
+    }
+
+    groupByMonth(documents) {
+        const months = {};
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        
+        documents.forEach(doc => {
+            const date = new Date(doc.date);
+            const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+            const monthName = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+            
+            if (!months[monthKey]) {
+                months[monthKey] = {
+                    name: monthName,
+                    revenue: 0
+                };
+            }
+            
+            months[monthKey].revenue += doc.grandTotal || 0;
+        });
+        
+        return Object.values(months).sort((a, b) => {
+            const [aMonth, aYear] = a.name.split(' ');
+            const [bMonth, bYear] = b.name.split(' ');
+            if (aYear !== bYear) return aYear - bYear;
+            return monthNames.indexOf(aMonth) - monthNames.indexOf(bMonth);
+        });
+    }
+
+    convertToCSV(data, headers = null) {
+        if (!data.length) return '';
+        
+        const actualHeaders = headers || Object.keys(data[0]);
+        const csvRows = [];
+        
+        // Add headers
+        csvRows.push(actualHeaders.join(','));
+        
+        // Add data rows
+        data.forEach(row => {
+            const values = actualHeaders.map(header => {
+                const value = row[header];
+                // Handle values that might contain commas
+                return typeof value === 'string' && value.includes(',') ? `"${value}"` : value;
+            });
+            csvRows.push(values.join(','));
+        });
+        
+        return csvRows.join('\n');
+    }
+
+    downloadCSV(csv, filename) {
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+}
+
+const reportGenerator = new ReportGenerator();
+
+// Export functions
+async function generateDailyReport() {
+    return reportGenerator.generateDailyReport();
+}
+
+async function generateDailyReportData() {
+    return reportGenerator.getDailyReportData();
+}
+
+function exportRevenueReport() {
+    return reportGenerator.exportRevenueReport();
+}
+
+function exportDocumentReport() {
+    return reportGenerator.exportDocumentReport();
+}
+
+function exportClientReport() {
+    return reportGenerator.exportClientReport();
+}
+
+// Make functions available globally
+window.generateDailyReport = generateDailyReport;
+window.generateDailyReportData = generateDailyReportData;
+window.exportRevenueReport = exportRevenueReport;
+window.exportDocumentReport = exportDocumentReport;
+window.exportClientReport = exportClientReport;

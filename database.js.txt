@@ -1,0 +1,301 @@
+// Database operations using puter.js storage
+
+class Database {
+    constructor() {
+        this.initialized = false;
+        this.init();
+    }
+
+    async init() {
+        try {
+            // Initialize puter.js
+            await puter.auth();
+            this.initialized = true;
+            console.log('Database initialized successfully');
+        } catch (error) {
+            console.error('Failed to initialize database:', error);
+            // Fallback to localStorage
+            this.useLocalStorage = true;
+            this.initialized = true;
+        }
+    }
+
+    async set(key, value) {
+        if (!this.initialized) await this.init();
+        
+        try {
+            if (this.useLocalStorage) {
+                localStorage.setItem(`samani_${key}`, JSON.stringify(value));
+            } else {
+                await puter.fs.writeFile(`/samani/${key}.json`, JSON.stringify(value));
+            }
+            return true;
+        } catch (error) {
+            console.error('Error saving data:', error);
+            return false;
+        }
+    }
+
+    async get(key) {
+        if (!this.initialized) await this.init();
+        
+        try {
+            if (this.useLocalStorage) {
+                const data = localStorage.getItem(`samani_${key}`);
+                return data ? JSON.parse(data) : null;
+            } else {
+                const data = await puter.fs.readFile(`/samani/${key}.json`);
+                return JSON.parse(data);
+            }
+        } catch (error) {
+            console.error('Error reading data:', error);
+            return null;
+        }
+    }
+
+    async delete(key) {
+        if (!this.initialized) await this.init();
+        
+        try {
+            if (this.useLocalStorage) {
+                localStorage.removeItem(`samani_${key}`);
+            } else {
+                await puter.fs.delete(`/samani/${key}.json`);
+            }
+            return true;
+        } catch (error) {
+            console.error('Error deleting data:', error);
+            return false;
+        }
+    }
+
+    async getAllKeys() {
+        if (!this.initialized) await this.init();
+        
+        try {
+            if (this.useLocalStorage) {
+                return Object.keys(localStorage)
+                    .filter(key => key.startsWith('samani_'))
+                    .map(key => key.replace('samani_', ''));
+            } else {
+                const files = await puter.fs.list('/samani');
+                return files.map(file => file.name.replace('.json', ''));
+            }
+        } catch (error) {
+            console.error('Error getting keys:', error);
+            return [];
+        }
+    }
+}
+
+const db = new Database();
+
+// Document operations
+async function saveDocument(documentData) {
+    try {
+        const docId = documentData.docRef || `doc_${Date.now()}`;
+        const documents = await getAllDocuments();
+        
+        // Remove existing document if editing
+        const existingIndex = documents.findIndex(doc => doc.id === docId);
+        if (existingIndex > -1) {
+            documents[existingIndex] = { ...documentData, id: docId };
+        } else {
+            documents.push({ ...documentData, id: docId });
+        }
+        
+        await db.set('documents', documents);
+        return docId;
+    } catch (error) {
+        console.error('Error saving document:', error);
+        throw error;
+    }
+}
+
+async function getDocument(documentId) {
+    try {
+        const documents = await getAllDocuments();
+        return documents.find(doc => doc.id === documentId);
+    } catch (error) {
+        console.error('Error getting document:', error);
+        return null;
+    }
+}
+
+async function getAllDocuments() {
+    try {
+        const documents = await db.get('documents');
+        return documents || [];
+    } catch (error) {
+        console.error('Error getting all documents:', error);
+        return [];
+    }
+}
+
+async function updateDocument(documentId, updates) {
+    try {
+        const documents = await getAllDocuments();
+        const index = documents.findIndex(doc => doc.id === documentId);
+        
+        if (index > -1) {
+            documents[index] = { ...documents[index], ...updates };
+            await db.set('documents', documents);
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.error('Error updating document:', error);
+        return false;
+    }
+}
+
+async function updateDocumentStatus(documentId, status) {
+    return updateDocument(documentId, { status });
+}
+
+async function updateInvoiceBalance(invoiceRef, paymentAmount) {
+    try {
+        const documents = await getAllDocuments();
+        const invoice = documents.find(doc => 
+            doc.docType === 'invoice' && doc.docRef === invoiceRef
+        );
+        
+        if (invoice) {
+            invoice.balancePaid = (invoice.balancePaid || 0) + paymentAmount;
+            invoice.balanceDue = (invoice.grandTotal || 0) - invoice.balancePaid;
+            
+            if (invoice.balanceDue <= 0) {
+                invoice.status = 'paid';
+            }
+            
+            await db.set('documents', documents);
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.error('Error updating invoice balance:', error);
+        return false;
+    }
+}
+
+// Client operations
+async function saveClient(clientData) {
+    try {
+        const clients = await getAllClients();
+        const clientId = clientData.email || `client_${Date.now()}`;
+        
+        const existingIndex = clients.findIndex(client => 
+            client.email === clientData.email || client.phone === clientData.phone
+        );
+        
+        if (existingIndex > -1) {
+            clients[existingIndex] = { ...clients[existingIndex], ...clientData, id: clientId };
+        } else {
+            clients.push({ ...clientData, id: clientId });
+        }
+        
+        await db.set('clients', clients);
+        return clientId;
+    } catch (error) {
+        console.error('Error saving client:', error);
+        throw error;
+    }
+}
+
+async function getAllClients() {
+    try {
+        const clients = await db.get('clients');
+        return clients || [];
+    } catch (error) {
+        console.error('Error getting clients:', error);
+        return [];
+    }
+}
+
+// Settings operations
+async function saveSettings(settings) {
+    try {
+        await db.set('settings', settings);
+        return true;
+    } catch (error) {
+        console.error('Error saving settings:', error);
+        return false;
+    }
+}
+
+async function getSettings() {
+    try {
+        const settings = await db.get('settings') || {};
+        
+        // Default settings
+        return {
+            approvalEmail: 'gn@samanicreations.com',
+            ccEmails: 'sales@samanicreations.com,accounts@samanicreations.com,operations@samanicreations.com',
+            defaultTerms: 'Net 30',
+            taxRate: 18,
+            emailNotifications: true,
+            autoReports: true,
+            approvalRequired: true,
+            ...settings
+        };
+    } catch (error) {
+        console.error('Error getting settings:', error);
+        return {
+            approvalEmail: 'gn@samanicreations.com',
+            ccEmails: 'sales@samanicreations.com,accounts@samanicreations.com,operations@samanicreations.com',
+            defaultTerms: 'Net 30',
+            taxRate: 18,
+            emailNotifications: true,
+            autoReports: true,
+            approvalRequired: true
+        };
+    }
+}
+
+// Initialize database
+async function initializeDatabase() {
+    try {
+        // Create initial data structure if not exists
+        const documents = await db.get('documents');
+        if (!documents) {
+            await db.set('documents', []);
+        }
+        
+        const clients = await db.get('clients');
+        if (!clients) {
+            await db.set('clients', []);
+        }
+        
+        const settings = await db.get('settings');
+        if (!settings) {
+            await saveSettings({
+                approvalEmail: 'gn@samanicreations.com',
+                ccEmails: 'sales@samanicreations.com,accounts@samanicreations.com,operations@samanicreations.com',
+                defaultTerms: 'Net 30',
+                taxRate: 18,
+                emailNotifications: true,
+                autoReports: true,
+                approvalRequired: true
+            });
+        }
+        
+        console.log('Database initialized');
+        return true;
+    } catch (error) {
+        console.error('Error initializing database:', error);
+        return false;
+    }
+}
+
+// Make functions available globally
+window.saveDocument = saveDocument;
+window.getDocument = getDocument;
+window.getAllDocuments = getAllDocuments;
+window.updateDocument = updateDocument;
+window.updateDocumentStatus = updateDocumentStatus;
+window.updateInvoiceBalance = updateInvoiceBalance;
+window.saveClient = saveClient;
+window.getAllClients = getAllClients;
+window.saveSettings = saveSettings;
+window.getSettings = getSettings;
+window.initializeDatabase = initializeDatabase;

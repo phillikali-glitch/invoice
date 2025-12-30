@@ -1,0 +1,1268 @@
+// Main Application Script
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize variables
+    let currentDocumentType = '';
+    let currentDocument = null;
+    let isEditing = false;
+    let editDocumentId = null;
+    
+    // DOM Elements
+    const loginScreen = document.getElementById('loginScreen');
+    const mainApp = document.getElementById('mainApp');
+    const loginBtn = document.getElementById('loginBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const usernameInput = document.getElementById('username');
+    const passwordInput = document.getElementById('password');
+    const loginError = document.getElementById('loginError');
+    
+    // Navigation elements
+    const navTabs = document.querySelectorAll('.nav-tab');
+    const tabContents = document.querySelectorAll('.tab-content');
+    
+    // Document creation elements
+    const docCards = document.querySelectorAll('.doc-card');
+    const formContainer = document.getElementById('formContainer');
+    const documentForm = document.getElementById('documentForm');
+    const formTitle = document.getElementById('formTitle');
+    const docTypeInput = document.getElementById('docType');
+    const receiptFields = document.getElementById('receiptFields');
+    
+    // Preview modal
+    const previewModal = document.getElementById('previewModal');
+    const previewBtn = document.getElementById('previewBtn');
+    const previewContent = document.getElementById('previewContent');
+    const sendApprovalBtn = document.getElementById('sendApprovalBtn');
+    
+    // Initialize database
+    initializeDatabase();
+    
+    // Login functionality
+    loginBtn.addEventListener('click', handleLogin);
+    logoutBtn.addEventListener('click', handleLogout);
+    
+    // Navigation functionality
+    navTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const tabId = tab.dataset.tab;
+            switchTab(tabId);
+        });
+    });
+    
+    // Document type selection
+    docCards.forEach(card => {
+        card.querySelector('.btn-select').addEventListener('click', function(e) {
+            e.stopPropagation();
+            const type = this.parentElement.dataset.type;
+            createNewDocument(type);
+        });
+    });
+    
+    // Form submission
+    documentForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        handleFormSubmit();
+    });
+    
+    // Preview button
+    previewBtn.addEventListener('click', function() {
+        if (validateForm()) {
+            generatePreview();
+        }
+    });
+    
+    // Close modal
+    previewModal.querySelector('.modal-close').addEventListener('click', function() {
+        previewModal.classList.remove('active');
+    });
+    
+    // Close modal when clicking outside
+    previewModal.addEventListener('click', function(e) {
+        if (e.target === this) {
+            previewModal.classList.remove('active');
+        }
+    });
+    
+    // Initialize items table
+    initializeItemsTable();
+    
+    // Initialize charts and reports
+    initializeCharts();
+    loadDocuments();
+    loadClients();
+    updateSystemInfo();
+    
+    // Event Listeners for Calculations
+    document.addEventListener('input', function(e) {
+        if (e.target.classList.contains('item-quantity') || 
+            e.target.classList.contains('item-rate')) {
+            calculateItemTotal(e.target);
+        }
+        if (e.target.classList.contains('item-total') ||
+            e.target.classList.contains('item-quantity') ||
+            e.target.classList.contains('item-rate')) {
+            calculateTotals();
+        }
+    });
+    
+    // Quick Report button
+    document.getElementById('quickReportBtn').addEventListener('click', function() {
+        generateDailyReport();
+    });
+    
+    // Add Client button
+    document.getElementById('addClientBtn').addEventListener('click', function() {
+        showAddClientModal();
+    });
+    
+    // Document filter
+    document.getElementById('docFilter').addEventListener('change', loadDocuments);
+    document.getElementById('docSearch').addEventListener('input', loadDocuments);
+    
+    // Report period buttons
+    document.querySelectorAll('.btn-period').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.btn-period').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            loadReports(this.dataset.period);
+        });
+    });
+    
+    // Functions
+    
+    function handleLogin() {
+        const username = usernameInput.value.trim();
+        const password = passwordInput.value.trim();
+        
+        if (username === 'admin' && password === 'Samani2025') {
+            loginScreen.style.display = 'none';
+            mainApp.style.display = 'block';
+            loginError.textContent = '';
+            
+            // Initialize session
+            localStorage.setItem('samaniLoggedIn', 'true');
+            localStorage.setItem('samaniUser', username);
+            
+            // Load initial data
+            loadDocuments();
+            loadClients();
+            loadReports('today');
+            
+        } else {
+            loginError.textContent = 'Invalid username or password';
+            passwordInput.value = '';
+        }
+    }
+    
+    function handleLogout() {
+        if (confirm('Are you sure you want to logout?')) {
+            localStorage.removeItem('samaniLoggedIn');
+            localStorage.removeItem('samaniUser');
+            loginScreen.style.display = 'flex';
+            mainApp.style.display = 'none';
+            usernameInput.value = '';
+            passwordInput.value = '';
+            loginError.textContent = '';
+        }
+    }
+    
+    function switchTab(tabId) {
+        // Update active tab
+        navTabs.forEach(tab => tab.classList.remove('active'));
+        document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
+        
+        // Show active content
+        tabContents.forEach(content => {
+            content.classList.remove('active');
+            if (content.id === `${tabId}Tab`) {
+                content.classList.add('active');
+            }
+        });
+    }
+    
+    function createNewDocument(type) {
+        currentDocumentType = type;
+        isEditing = false;
+        editDocumentId = null;
+        
+        // Update UI
+        document.querySelector('.document-selector').style.display = 'none';
+        formContainer.style.display = 'block';
+        
+        // Set form title
+        const titles = {
+            'quote': 'Create Quotation',
+            'invoice': 'Create Invoice',
+            'receipt': 'Create Receipt'
+        };
+        formTitle.textContent = titles[type];
+        
+        // Set document type
+        docTypeInput.value = type;
+        
+        // Generate reference number
+        generateReferenceNumber(type);
+        
+        // Set today's date
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('date').value = today;
+        
+        // Set due date (30 days from today)
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + 30);
+        document.getElementById('dueDate').value = dueDate.toISOString().split('T')[0];
+        
+        // Show/hide receipt fields
+        if (type === 'receipt') {
+            receiptFields.style.display = 'block';
+            document.getElementById('paymentMode').required = true;
+            document.getElementById('accountNumber').required = true;
+        } else {
+            receiptFields.style.display = 'none';
+            document.getElementById('paymentMode').required = false;
+            document.getElementById('accountNumber').required = false;
+        }
+        
+        // Clear form
+        documentForm.reset();
+        
+        // Clear items table
+        const itemsBody = document.getElementById('itemsBody');
+        itemsBody.innerHTML = '';
+        addNewItemRow();
+        
+        // Update totals
+        calculateTotals();
+        
+        // Scroll to form
+        formContainer.scrollIntoView({ behavior: 'smooth' });
+    }
+    
+    function generateReferenceNumber(type) {
+        const prefixes = {
+            'quote': 'QT',
+            'invoice': 'INV',
+            'receipt': 'RCT'
+        };
+        
+        const prefix = prefixes[currentDocumentType] || 'DOC';
+        const timestamp = Date.now().toString().slice(-6);
+        const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+        const ref = `SAMANI_UG-${prefix}-${timestamp}${random}`;
+        
+        document.getElementById('docRef').value = ref;
+        return ref;
+    }
+    
+    function initializeItemsTable() {
+        addNewItemRow();
+    }
+    
+    function addNewItemRow() {
+        const itemsBody = document.getElementById('itemsBody');
+        const rowCount = itemsBody.children.length;
+        
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>
+                <input type="text" class="item-name" placeholder="Item name">
+            </td>
+            <td>
+                <textarea class="item-description" placeholder="Description" rows="2"></textarea>
+            </td>
+            <td>
+                <input type="number" class="item-quantity" value="1" min="1" step="1">
+            </td>
+            <td>
+                <input type="number" class="item-rate" value="0" min="0" step="0.01">
+            </td>
+            <td>
+                <input type="number" class="item-total" value="0" readonly>
+            </td>
+            <td>
+                <button type="button" class="btn-remove-item" onclick="removeItemRow(this)">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        
+        itemsBody.appendChild(row);
+        
+        // Add event listeners
+        const quantityInput = row.querySelector('.item-quantity');
+        const rateInput = row.querySelector('.item-rate');
+        
+        quantityInput.addEventListener('input', () => calculateItemTotal(quantityInput));
+        rateInput.addEventListener('input', () => calculateItemTotal(rateInput));
+        
+        calculateItemTotal(quantityInput);
+    }
+    
+    function calculateItemTotal(input) {
+        const row = input.closest('tr');
+        const quantity = parseFloat(row.querySelector('.item-quantity').value) || 0;
+        const rate = parseFloat(row.querySelector('.item-rate').value) || 0;
+        const total = quantity * rate;
+        
+        row.querySelector('.item-total').value = total.toFixed(2);
+        calculateTotals();
+    }
+    
+    function calculateTotals() {
+        const rows = document.querySelectorAll('#itemsBody tr');
+        let subtotal = 0;
+        
+        rows.forEach(row => {
+            const total = parseFloat(row.querySelector('.item-total').value) || 0;
+            subtotal += total;
+        });
+        
+        const taxRate = parseFloat(document.getElementById('taxRate').value) || 18;
+        const taxAmount = subtotal * (taxRate / 100);
+        const grandTotal = subtotal + taxAmount;
+        
+        document.getElementById('subtotal').textContent = formatCurrency(subtotal);
+        document.getElementById('taxAmount').textContent = formatCurrency(taxAmount);
+        document.getElementById('grandTotal').textContent = formatCurrency(grandTotal);
+    }
+    
+    function formatCurrency(amount) {
+        return new Intl.NumberFormat('en-UG', {
+            style: 'currency',
+            currency: 'UGX',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+        }).format(amount);
+    }
+    
+    function removeItemRow(button) {
+        const row = button.closest('tr');
+        const rows = document.querySelectorAll('#itemsBody tr');
+        
+        if (rows.length > 1) {
+            row.remove();
+            calculateTotals();
+        }
+    }
+    
+    function validateForm() {
+        const requiredFields = documentForm.querySelectorAll('[required]');
+        let isValid = true;
+        
+        requiredFields.forEach(field => {
+            if (!field.value.trim()) {
+                field.style.borderColor = 'var(--danger-color)';
+                isValid = false;
+            } else {
+                field.style.borderColor = '';
+            }
+        });
+        
+        // Check if at least one item has values
+        const items = document.querySelectorAll('#itemsBody tr');
+        let hasItems = false;
+        items.forEach(row => {
+            const name = row.querySelector('.item-name').value.trim();
+            const rate = row.querySelector('.item-rate').value;
+            if (name && parseFloat(rate) > 0) {
+                hasItems = true;
+            }
+        });
+        
+        if (!hasItems) {
+            alert('Please add at least one item with a valid rate');
+            isValid = false;
+        }
+        
+        return isValid;
+    }
+    
+    function handleFormSubmit() {
+        if (!validateForm()) {
+            alert('Please fill in all required fields correctly');
+            return;
+        }
+        
+        // Collect form data
+        const formData = new FormData(documentForm);
+        const documentData = Object.fromEntries(formData.entries());
+        
+        // Collect items
+        const items = [];
+        document.querySelectorAll('#itemsBody tr').forEach(row => {
+            const name = row.querySelector('.item-name').value.trim();
+            if (name) {
+                items.push({
+                    name: name,
+                    description: row.querySelector('.item-description').value.trim(),
+                    quantity: parseFloat(row.querySelector('.item-quantity').value) || 1,
+                    rate: parseFloat(row.querySelector('.item-rate').value) || 0,
+                    total: parseFloat(row.querySelector('.item-total').value) || 0
+                });
+            }
+        });
+        
+        documentData.items = items;
+        documentData.subtotal = parseFloat(document.getElementById('subtotal').textContent.replace(/[^0-9.-]+/g, '')) || 0;
+        documentData.taxAmount = parseFloat(document.getElementById('taxAmount').textContent.replace(/[^0-9.-]+/g, '')) || 0;
+        documentData.grandTotal = parseFloat(document.getElementById('grandTotal').textContent.replace(/[^0-9.-]+/g, '')) || 0;
+        documentData.status = 'draft';
+        documentData.createdAt = new Date().toISOString();
+        documentData.createdBy = localStorage.getItem('samaniUser') || 'admin';
+        
+        if (currentDocumentType === 'receipt') {
+            documentData.paymentDate = new Date().toISOString();
+            
+            // Update invoice balance if invoice reference is provided
+            const invoiceRef = documentData.invoiceRef;
+            if (invoiceRef) {
+                updateInvoiceBalance(invoiceRef, documentData.grandTotal);
+            }
+        }
+        
+        // Save document
+        saveDocument(documentData).then(documentId => {
+            alert('Document saved successfully!');
+            
+            if (currentDocumentType === 'receipt') {
+                // For receipts, directly generate PDF
+                currentDocument = { ...documentData, id: documentId };
+                generatePDF();
+            } else {
+                // For quotes and invoices, show approval option
+                currentDocument = { ...documentData, id: documentId };
+                generatePreview();
+                previewModal.classList.add('active');
+                
+                // Show approval button
+                sendApprovalBtn.style.display = 'flex';
+                sendApprovalBtn.onclick = () => sendForApproval(documentId);
+            }
+            
+            // Reset form
+            documentForm.reset();
+            document.querySelector('.document-selector').style.display = 'block';
+            formContainer.style.display = 'none';
+            
+            // Reload documents list
+            loadDocuments();
+            
+        }).catch(error => {
+            console.error('Error saving document:', error);
+            alert('Error saving document. Please try again.');
+        });
+    }
+    
+    function generatePreview() {
+        const formData = new FormData(documentForm);
+        const data = Object.fromEntries(formData.entries());
+        
+        // Collect items
+        const items = [];
+        document.querySelectorAll('#itemsBody tr').forEach(row => {
+            const name = row.querySelector('.item-name').value.trim();
+            if (name) {
+                items.push({
+                    name: name,
+                    description: row.querySelector('.item-description').value.trim(),
+                    quantity: parseFloat(row.querySelector('.item-quantity').value) || 1,
+                    rate: parseFloat(row.querySelector('.item-rate').value) || 0,
+                    total: parseFloat(row.querySelector('.item-total').value) || 0
+                });
+            }
+        });
+        
+        const subtotal = parseFloat(document.getElementById('subtotal').textContent.replace(/[^0-9.-]+/g, '')) || 0;
+        const taxAmount = parseFloat(document.getElementById('taxAmount').textContent.replace(/[^0-9.-]+/g, '')) || 0;
+        const grandTotal = parseFloat(document.getElementById('grandTotal').textContent.replace(/[^0-9.-]+/g, '')) || 0;
+        
+        // Generate preview HTML
+        let previewHTML = `
+            <div class="pdf-preview">
+                <div class="pdf-header">
+                    <div class="pdf-logo">
+                        <img src="https://i.ibb.co/H1wL4ph/official-samani-logo.png" alt="SAMANI CREATIONS">
+                    </div>
+                    <div class="pdf-company-info">
+                        <h1>SAMANI CREATIONS LTD</h1>
+                        <p>Furniture • Interior Design • Woodwork</p>
+                        <p>Professional Invoicing System</p>
+                    </div>
+                </div>
+                
+                <div class="pdf-title">
+                    <h2>${currentDocumentType.toUpperCase()}</h2>
+                    <div class="pdf-ref">
+                        <strong>Reference:</strong> ${data.docRef}
+                    </div>
+                </div>
+                
+                <div class="pdf-details">
+                    <div class="pdf-section">
+                        <h3>Document Details</h3>
+                        <table class="pdf-table">
+                            <tr>
+                                <td><strong>Date:</strong></td>
+                                <td>${data.date}</td>
+                                <td><strong>Due Date:</strong></td>
+                                <td>${data.dueDate || 'N/A'}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Payment Terms:</strong></td>
+                                <td colspan="3">${data.paymentTerms}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    
+                    <div class="pdf-section">
+                        <h3>Client Information</h3>
+                        <table class="pdf-table">
+                            <tr>
+                                <td><strong>Client Name:</strong></td>
+                                <td>${data.clientName}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Project:</strong></td>
+                                <td>${data.projectName}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Client Site:</strong></td>
+                                <td>${data.clientSite || 'N/A'}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Phone:</strong></td>
+                                <td>${data.clientPhone}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Email:</strong></td>
+                                <td>${data.clientEmail || 'N/A'}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="pdf-section">
+                    <h3>Items & Services</h3>
+                    <table class="pdf-items">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th>Description</th>
+                                <th>Qty</th>
+                                <th>Rate (UGX)</th>
+                                <th>Total (UGX)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
+        
+        items.forEach(item => {
+            previewHTML += `
+                <tr>
+                    <td>${item.name}</td>
+                    <td>${item.description}</td>
+                    <td>${item.quantity}</td>
+                    <td>${formatCurrency(item.rate)}</td>
+                    <td>${formatCurrency(item.total)}</td>
+                </tr>
+            `;
+        });
+        
+        previewHTML += `
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="pdf-totals">
+                    <table class="pdf-totals-table">
+                        <tr>
+                            <td><strong>Subtotal:</strong></td>
+                            <td>${formatCurrency(subtotal)}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Tax (18%):</strong></td>
+                            <td>${formatCurrency(taxAmount)}</td>
+                        </tr>
+                        <tr class="grand-total">
+                            <td><strong>GRAND TOTAL:</strong></td>
+                            <td>${formatCurrency(grandTotal)}</td>
+                        </tr>
+                    </table>
+                </div>
+        `;
+        
+        if (currentDocumentType === 'receipt') {
+            previewHTML += `
+                <div class="pdf-section">
+                    <h3>Payment Information</h3>
+                    <table class="pdf-table">
+                        <tr>
+                            <td><strong>Payment Mode:</strong></td>
+                            <td>${data.paymentMode}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Account/Ref Number:</strong></td>
+                            <td>${data.accountNumber}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Payment Date:</strong></td>
+                            <td>${new Date().toLocaleDateString()}</td>
+                        </tr>
+                    </table>
+                </div>
+            `;
+        }
+        
+        if (data.notes) {
+            previewHTML += `
+                <div class="pdf-section">
+                    <h3>Notes</h3>
+                    <p>${data.notes}</p>
+                </div>
+            `;
+        }
+        
+        previewHTML += `
+                <div class="pdf-footer">
+                    <div class="pdf-terms">
+                        <p><strong>Terms & Conditions:</strong></p>
+                        <p>1. All payments are due within the specified payment terms.</p>
+                        <p>2. Late payments may incur additional charges.</p>
+                        <p>3. All products and services are subject to SAMANI CREATIONS LTD terms.</p>
+                    </div>
+                    <div class="pdf-stamp">
+                        <div class="stamp">
+                            <p>Authorized Signature</p>
+                            <div class="signature-line"></div>
+                            <p>Date: ${new Date().toLocaleDateString()}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        previewContent.innerHTML = previewHTML;
+    }
+    
+    function generatePDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        // Add company logo
+        const logoUrl = 'https://i.ibb.co/H1wL4ph/official-samani-logo.png';
+        
+        // Add content to PDF
+        doc.setFontSize(20);
+        doc.setFont('helvetica', 'bold');
+        doc.text('SAMANI CREATIONS LTD', 105, 20, { align: 'center' });
+        
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Furniture • Interior Design • Woodwork', 105, 30, { align: 'center' });
+        
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text(currentDocumentType.toUpperCase(), 105, 45, { align: 'center' });
+        
+        // Add reference number
+        doc.setFontSize(10);
+        doc.text(`Reference: ${currentDocument.docRef}`, 20, 60);
+        
+        // Add date
+        doc.text(`Date: ${currentDocument.date}`, 20, 70);
+        
+        if (currentDocument.dueDate) {
+            doc.text(`Due Date: ${currentDocument.dueDate}`, 20, 80);
+        }
+        
+        // Add client information
+        doc.setFont('helvetica', 'bold');
+        doc.text('Bill To:', 20, 100);
+        doc.setFont('helvetica', 'normal');
+        doc.text(currentDocument.clientName, 20, 110);
+        doc.text(`Project: ${currentDocument.projectName}`, 20, 120);
+        doc.text(`Phone: ${currentDocument.clientPhone}`, 20, 130);
+        if (currentDocument.clientEmail) {
+            doc.text(`Email: ${currentDocument.clientEmail}`, 20, 140);
+        }
+        
+        // Add items table
+        let y = 160;
+        doc.setFont('helvetica', 'bold');
+        doc.text('Item', 20, y);
+        doc.text('Description', 60, y);
+        doc.text('Qty', 120, y);
+        doc.text('Rate', 140, y);
+        doc.text('Total', 170, y);
+        
+        y += 10;
+        doc.setFont('helvetica', 'normal');
+        
+        currentDocument.items.forEach(item => {
+            doc.text(item.name, 20, y);
+            
+            // Split description if too long
+            const descLines = doc.splitTextToSize(item.description, 40);
+            descLines.forEach((line, i) => {
+                doc.text(line, 60, y + (i * 5));
+            });
+            
+            doc.text(item.quantity.toString(), 120, y);
+            doc.text(formatCurrency(item.rate), 140, y);
+            doc.text(formatCurrency(item.total), 170, y);
+            
+            y += Math.max(descLines.length * 5, 10);
+            
+            if (y > 250) {
+                doc.addPage();
+                y = 20;
+            }
+        });
+        
+        // Add totals
+        doc.setFont('helvetica', 'bold');
+        doc.text('Subtotal:', 140, y + 10);
+        doc.text(formatCurrency(currentDocument.subtotal), 170, y + 10);
+        
+        doc.text('Tax (18%):', 140, y + 20);
+        doc.text(formatCurrency(currentDocument.taxAmount), 170, y + 20);
+        
+        doc.text('GRAND TOTAL:', 140, y + 30);
+        doc.text(formatCurrency(currentDocument.grandTotal), 170, y + 30);
+        
+        if (currentDocumentType === 'receipt') {
+            y += 50;
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'bold');
+            doc.text('PAYMENT RECEIVED', 105, y, { align: 'center' });
+            
+            doc.setFontSize(10);
+            doc.text(`Payment Mode: ${currentDocument.paymentMode}`, 20, y + 10);
+            doc.text(`Account/Ref: ${currentDocument.accountNumber}`, 20, y + 20);
+            doc.text(`Date: ${new Date().toLocaleDateString()}`, 20, y + 30);
+        }
+        
+        // Add footer
+        doc.setFontSize(8);
+        doc.text('Thank you for choosing SAMANI CREATIONS LTD', 105, 280, { align: 'center' });
+        doc.text('All payments are subject to our terms and conditions', 105, 285, { align: 'center' });
+        
+        // Save the PDF
+        const fileName = `${currentDocumentType}_${currentDocument.docRef}.pdf`;
+        doc.save(fileName);
+        
+        // Update document status to completed
+        updateDocumentStatus(currentDocument.id, 'completed');
+        
+        // Close modal
+        previewModal.classList.remove('active');
+    }
+    
+    async function sendForApproval(documentId) {
+        const document = await getDocument(documentId);
+        
+        if (!document) {
+            alert('Document not found');
+            return;
+        }
+        
+        // Update status to pending approval
+        document.status = 'pending_approval';
+        await updateDocument(documentId, document);
+        
+        // Send approval email
+        const emailResult = await sendApprovalEmail(document);
+        
+        if (emailResult.success) {
+            alert('Document sent for approval. You will be notified when approved.');
+            sendApprovalBtn.style.display = 'none';
+            previewModal.classList.remove('active');
+            loadDocuments();
+        } else {
+            alert('Error sending approval request. Please try again.');
+        }
+    }
+    
+    function printPreview() {
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Print Document</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; margin: 40px; }
+                        .print-content { max-width: 800px; margin: 0 auto; }
+                    </style>
+                </head>
+                <body>
+                    <div class="print-content">${previewContent.innerHTML}</div>
+                    <script>
+                        window.onload = function() { window.print(); window.close(); }
+                    </script>
+                </body>
+            </html>
+        `);
+        printWindow.document.close();
+    }
+    
+    function loadDocuments() {
+        const filter = document.getElementById('docFilter').value;
+        const search = document.getElementById('docSearch').value.toLowerCase();
+        
+        getAllDocuments().then(documents => {
+            const documentsList = document.getElementById('documentsList');
+            documentsList.innerHTML = '';
+            
+            let filteredDocs = documents;
+            
+            if (filter !== 'all') {
+                filteredDocs = documents.filter(doc => doc.docType === filter);
+            }
+            
+            if (search) {
+                filteredDocs = filteredDocs.filter(doc => 
+                    doc.clientName.toLowerCase().includes(search) ||
+                    doc.projectName.toLowerCase().includes(search) ||
+                    doc.docRef.toLowerCase().includes(search)
+                );
+            }
+            
+            filteredDocs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            
+            filteredDocs.forEach(doc => {
+                const docItem = document.createElement('div');
+                docItem.className = 'document-item';
+                
+                const statusClass = {
+                    'draft': 'status-pending',
+                    'pending_approval': 'status-pending',
+                    'approved': 'status-approved',
+                    'completed': 'status-paid',
+                    'overdue': 'status-overdue'
+                }[doc.status] || 'status-pending';
+                
+                docItem.innerHTML = `
+                    <div class="doc-info">
+                        <h4>${doc.projectName}</h4>
+                        <p><strong>Client:</strong> ${doc.clientName}</p>
+                        <p><strong>Ref:</strong> ${doc.docRef}</p>
+                        <p><strong>Date:</strong> ${doc.date}</p>
+                        <p><strong>Total:</strong> ${formatCurrency(doc.grandTotal)}</p>
+                    </div>
+                    <div class="doc-status ${statusClass}">
+                        ${doc.status.replace('_', ' ').toUpperCase()}
+                    </div>
+                    <div class="doc-actions">
+                        <button class="btn-action" onclick="viewDocument('${doc.id}')">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn-action" onclick="editDocument('${doc.id}')">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn-action" onclick="downloadDocument('${doc.id}')">
+                            <i class="fas fa-download"></i>
+                        </button>
+                    </div>
+                `;
+                
+                documentsList.appendChild(docItem);
+            });
+            
+            if (filteredDocs.length === 0) {
+                documentsList.innerHTML = '<div class="no-documents">No documents found</div>';
+            }
+        });
+    }
+    
+    async function viewDocument(documentId) {
+        const doc = await getDocument(documentId);
+        if (doc) {
+            currentDocument = doc;
+            currentDocumentType = doc.docType;
+            generatePreview();
+            previewModal.classList.add('active');
+            sendApprovalBtn.style.display = 'none';
+        }
+    }
+    
+    async function editDocument(documentId) {
+        const doc = await getDocument(documentId);
+        if (doc) {
+            currentDocumentType = doc.docType;
+            isEditing = true;
+            editDocumentId = documentId;
+            
+            // Populate form
+            Object.keys(doc).forEach(key => {
+                const element = document.getElementById(key);
+                if (element && doc[key] && key !== 'items') {
+                    element.value = doc[key];
+                }
+            });
+            
+            // Populate items
+            const itemsBody = document.getElementById('itemsBody');
+            itemsBody.innerHTML = '';
+            
+            if (doc.items && Array.isArray(doc.items)) {
+                doc.items.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>
+                            <input type="text" class="item-name" value="${item.name}">
+                        </td>
+                        <td>
+                            <textarea class="item-description" rows="2">${item.description || ''}</textarea>
+                        </td>
+                        <td>
+                            <input type="number" class="item-quantity" value="${item.quantity}">
+                        </td>
+                        <td>
+                            <input type="number" class="item-rate" value="${item.rate}">
+                        </td>
+                        <td>
+                            <input type="number" class="item-total" value="${item.total}" readonly>
+                        </td>
+                        <td>
+                            <button type="button" class="btn-remove-item" onclick="removeItemRow(this)">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    `;
+                    itemsBody.appendChild(row);
+                });
+            }
+            
+            // Show form
+            document.querySelector('.document-selector').style.display = 'none';
+            formContainer.style.display = 'block';
+            formTitle.textContent = `Edit ${currentDocumentType}`;
+            
+            if (currentDocumentType === 'receipt') {
+                receiptFields.style.display = 'block';
+            }
+            
+            calculateTotals();
+            
+            // Scroll to form
+            formContainer.scrollIntoView({ behavior: 'smooth' });
+        }
+    }
+    
+    async function downloadDocument(documentId) {
+        const doc = await getDocument(documentId);
+        if (doc) {
+            currentDocument = doc;
+            currentDocumentType = doc.docType;
+            generatePDF();
+        }
+    }
+    
+    function initializeCharts() {
+        // Initialize revenue chart
+        const ctx = document.getElementById('revenueChart').getContext('2d');
+        window.revenueChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Revenue (UGX)',
+                    data: [],
+                    borderColor: 'rgb(75, 192, 192)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+    }
+    
+    async function loadReports(period) {
+        const documents = await getAllDocuments();
+        
+        // Filter by period
+        const now = new Date();
+        let filteredDocs = documents;
+        
+        switch(period) {
+            case 'today':
+                filteredDocs = documents.filter(doc => {
+                    const docDate = new Date(doc.date);
+                    return docDate.toDateString() === now.toDateString();
+                });
+                break;
+            case 'week':
+                const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                filteredDocs = documents.filter(doc => new Date(doc.date) >= weekAgo);
+                break;
+            case 'month':
+                const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+                filteredDocs = documents.filter(doc => new Date(doc.date) >= monthAgo);
+                break;
+        }
+        
+        // Update revenue chart
+        const revenueData = groupByDate(filteredDocs);
+        window.revenueChart.data.labels = Object.keys(revenueData);
+        window.revenueChart.data.datasets[0].data = Object.values(revenueData);
+        window.revenueChart.update();
+        
+        // Update document statistics
+        updateDocumentStats(filteredDocs);
+        
+        // Update client activity
+        updateClientActivity(filteredDocs);
+    }
+    
+    function groupByDate(documents) {
+        const groups = {};
+        documents.forEach(doc => {
+            if (!groups[doc.date]) {
+                groups[doc.date] = 0;
+            }
+            groups[doc.date] += doc.grandTotal || 0;
+        });
+        return groups;
+    }
+    
+    function updateDocumentStats(documents) {
+        const stats = {
+            quotes: documents.filter(d => d.docType === 'quote').length,
+            invoices: documents.filter(d => d.docType === 'invoice').length,
+            receipts: documents.filter(d => d.docType === 'receipt').length,
+            totalRevenue: documents.reduce((sum, doc) => sum + (doc.grandTotal || 0), 0),
+            pendingApprovals: documents.filter(d => d.status === 'pending_approval').length
+        };
+        
+        const statsHTML = `
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-value">${stats.quotes}</div>
+                    <div class="stat-label">Quotations</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${stats.invoices}</div>
+                    <div class="stat-label">Invoices</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${stats.receipts}</div>
+                    <div class="stat-label">Receipts</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${formatCurrency(stats.totalRevenue)}</div>
+                    <div class="stat-label">Total Revenue</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${stats.pendingApprovals}</div>
+                    <div class="stat-label">Pending Approvals</div>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('documentStats').innerHTML = statsHTML;
+    }
+    
+    function updateClientActivity(documents) {
+        const clientMap = {};
+        documents.forEach(doc => {
+            if (!clientMap[doc.clientName]) {
+                clientMap[doc.clientName] = {
+                    count: 0,
+                    total: 0
+                };
+            }
+            clientMap[doc.clientName].count++;
+            clientMap[doc.clientName].total += doc.grandTotal || 0;
+        });
+        
+        let clientHTML = '<div class="client-activity">';
+        Object.entries(clientMap).forEach(([client, data]) => {
+            clientHTML += `
+                <div class="client-item">
+                    <div class="client-name">${client}</div>
+                    <div class="client-stats">
+                        <span>${data.count} documents</span>
+                        <span>${formatCurrency(data.total)}</span>
+                    </div>
+                </div>
+            `;
+        });
+        clientHTML += '</div>';
+        
+        document.getElementById('clientActivity').innerHTML = clientHTML;
+    }
+    
+    async function loadClients() {
+        const documents = await getAllDocuments();
+        const clients = {};
+        
+        documents.forEach(doc => {
+            if (doc.clientName && !clients[doc.clientName]) {
+                clients[doc.clientName] = {
+                    name: doc.clientName,
+                    email: doc.clientEmail || '',
+                    phone: doc.clientPhone || '',
+                    lastProject: doc.projectName,
+                    lastDate: doc.date,
+                    totalDocuments: 0,
+                    totalValue: 0
+                };
+            }
+            
+            if (clients[doc.clientName]) {
+                clients[doc.clientName].totalDocuments++;
+                clients[doc.clientName].totalValue += doc.grandTotal || 0;
+            }
+        });
+        
+        const clientsList = document.getElementById('clientsList');
+        clientsList.innerHTML = '';
+        
+        Object.values(clients).forEach(client => {
+            const clientCard = document.createElement('div');
+            clientCard.className = 'client-card';
+            clientCard.innerHTML = `
+                <div class="client-info">
+                    <h4>${client.name}</h4>
+                    <p><i class="fas fa-phone"></i> ${client.phone}</p>
+                    <p><i class="fas fa-envelope"></i> ${client.email || 'No email'}</p>
+                    <p><i class="fas fa-project-diagram"></i> ${client.lastProject}</p>
+                </div>
+                <div class="client-stats">
+                    <div class="stat">
+                        <div class="stat-value">${client.totalDocuments}</div>
+                        <div class="stat-label">Documents</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">${formatCurrency(client.totalValue)}</div>
+                        <div class="stat-label">Total Value</div>
+                    </div>
+                </div>
+                <div class="client-actions">
+                    <button class="btn-action" onclick="contactClient('${client.email}', '${client.phone}')">
+                        <i class="fas fa-comment"></i>
+                    </button>
+                    <button class="btn-action" onclick="viewClientHistory('${client.name}')">
+                        <i class="fas fa-history"></i>
+                    </button>
+                </div>
+            `;
+            clientsList.appendChild(clientCard);
+        });
+    }
+    
+    function showAddClientModal() {
+        const modalHTML = `
+            <div class="modal active">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>Add New Client</h3>
+                        <button class="modal-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="clientForm">
+                            <div class="form-group">
+                                <label>Client Name *</label>
+                                <input type="text" id="newClientName" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Email</label>
+                                <input type="email" id="newClientEmail">
+                            </div>
+                            <div class="form-group">
+                                <label>Phone *</label>
+                                <input type="tel" id="newClientPhone" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Address</label>
+                                <textarea id="newClientAddress" rows="3"></textarea>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+                        <button class="btn-primary" onclick="saveNewClient()">Save Client</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        document.querySelector('.modal-close').addEventListener('click', closeModal);
+    }
+    
+    function closeModal() {
+        const modal = document.querySelector('.modal.active');
+        if (modal) {
+            modal.remove();
+        }
+    }
+    
+    async function saveNewClient() {
+        const clientData = {
+            name: document.getElementById('newClientName').value,
+            email: document.getElementById('newClientEmail').value,
+            phone: document.getElementById('newClientPhone').value,
+            address: document.getElementById('newClientAddress').value,
+            createdAt: new Date().toISOString()
+        };
+        
+        await saveClient(clientData);
+        closeModal();
+        loadClients();
+        alert('Client saved successfully!');
+    }
+    
+    function updateSystemInfo() {
+        getAllDocuments().then(docs => {
+            document.getElementById('docCount').textContent = docs.length;
+            // Calculate approximate storage (rough estimate)
+            const storageKB = docs.length * 2; // ~2KB per document
+            document.getElementById('storageUsed').textContent = `${storageKB} KB`;
+        });
+    }
+    
+    function backupData() {
+        getAllDocuments().then(docs => {
+            const backup = {
+                timestamp: new Date().toISOString(),
+                documents: docs,
+                totalCount: docs.length
+            };
+            
+            const backupStr = JSON.stringify(backup, null, 2);
+            const blob = new Blob([backupStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `samani_backup_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            document.getElementById('lastBackup').textContent = new Date().toLocaleString();
+            alert('Backup completed successfully!');
+        });
+    }
+    
+    // Make functions available globally
+    window.removeItemRow = removeItemRow;
+    window.viewDocument = viewDocument;
+    window.editDocument = editDocument;
+    window.downloadDocument = downloadDocument;
+    window.contactClient = contactClient;
+    window.viewClientHistory = viewClientHistory;
+    window.generateDailyReport = generateDailyReport;
+    window.exportRevenueReport = exportRevenueReport;
+    window.exportDocumentReport = exportDocumentReport;
+    window.exportClientReport = exportClientReport;
+    window.saveEmailSettings = saveEmailSettings;
+    window.saveDocSettings = saveDocSettings;
+    window.backupData = backupData;
+    window.printPreview = printPreview;
+    window.generatePDF = generatePDF;
+    window.closeModal = closeModal;
+    window.saveNewClient = saveNewClient;
+});
