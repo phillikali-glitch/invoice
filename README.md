@@ -11,12 +11,12 @@ A fully functional, professional web platform for generating quotes, invoices, a
 
 ## Project Structure
 The main application files are:
-- `index.html.txt` - Main application interface
-- `style.css.txt` - All styling rules
-- `script.js.txt` - Primary application logic
-- `database.js.txt` - Handles data storage (uses puter.js)
-- `email-service.js.txt` - Manages the email approval system
-- `report-generator.js.txt` - Creates daily and weekly reports
+- `index.html` - Main application interface
+- `style.css` - All styling rules
+- `script.js` - Primary application logic
+- `database.js` - Handles data storage (uses puter.js)
+- `email-service.js` - Manages the email approval system
+- `report-generator.js` - Creates daily and weekly reports
 
 ## Usage
 1.  Open `index.html.txt` in a browser.
