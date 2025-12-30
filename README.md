@@ -19,6 +19,6 @@ The main application files are:
 - `report-generator.js` - Creates daily and weekly reports
 
 ## Usage
-1.  Open `index.html.txt` in a browser.
+1.  Open `index.html` in a browser.
 2.  Log in with the default credentials (admin / Samani2025).
 3.  Navigate using the tabs to create documents, view archives, or run reports.
